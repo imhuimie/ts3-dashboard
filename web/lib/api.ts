@@ -24,6 +24,13 @@ const API_BASE = process.env.NEXT_PUBLIC_TS3_API_BASE_URL ?? "http://localhost:8
 
 type RequestOptions = RequestInit & { raw?: boolean };
 
+function jsonBody(payload: unknown) {
+  return JSON.stringify(payload, (_key, value) => {
+    if (typeof value === "number" && !Number.isFinite(value)) return 0;
+    return value;
+  });
+}
+
 function buildPath(pathname: string, query?: Record<string, string | number | boolean | undefined>) {
   const url = new URL(pathname, "http://ts3-dashboard.local");
   if (query) {
@@ -114,8 +121,8 @@ export const api = {
   pokeClient: (clientId: number, payload: { message: string }) => request<{ ok: boolean }>(`/clients/${clientId}/poke`, { method: "POST", body: JSON.stringify(payload) }),
   deleteClientDatabase: (clientDbId: number) => request<{ ok: boolean }>(`/client-database/${clientDbId}`, { method: "DELETE" }),
   getChannels: async () => (await request<{ channels: ChannelSummary[] }>("/channels")).channels,
-  createChannel: (payload: { name: string; parentId: number; topic: string; password: string; maxClients: number; type: string; orderAfterId?: number }) => request<{ ok: boolean; channelId: number }>("/channels", { method: "POST", body: JSON.stringify(payload) }),
-  updateChannel: (channelId: number, payload: { name: string; parentId: number; topic: string; password: string; maxClients: number; type: string; orderAfterId?: number }) => request<{ ok: boolean }>(`/channels/${channelId}`, { method: "PUT", body: JSON.stringify(payload) }),
+  createChannel: (payload: { name: string; parentId: number; topic: string; password: string; maxClients: number; type: string; orderAfterId?: number }) => request<{ ok: boolean; channelId: number }>("/channels", { method: "POST", body: jsonBody(payload) }),
+  updateChannel: (channelId: number, payload: { name: string; parentId: number; topic: string; password: string; maxClients: number; type: string; orderAfterId?: number }) => request<{ ok: boolean }>(`/channels/${channelId}`, { method: "PUT", body: jsonBody(payload) }),
   deleteChannel: (channelId: number, force = true) => request<{ ok: boolean }>(buildPath(`/channels/${channelId}`, { force: force ? 1 : 0 }), { method: "DELETE" }),
   getServerGroups: async () => (await request<{ groups: PermissionTarget[] }>("/server-groups")).groups,
   createServerGroup: (payload: { name: string; type: number }) => request<{ ok: boolean; groupId: number }>("/server-groups", { method: "POST", body: JSON.stringify(payload) }),
@@ -149,8 +156,8 @@ export const api = {
   deleteComplaint: (payload: { tcldbid: number; fcldbid: number }) => request<{ ok: boolean }>("/complaints", { method: "DELETE", body: JSON.stringify(payload) }),
   sendTextMessage: (payload: { targetMode: number; target: number; message: string }) => request<{ ok: boolean }>("/messages", { method: "POST", body: JSON.stringify(payload) }),
   getServerAdmin: () => request<VirtualServerAdminInfo>("/server-admin"),
-  updateServerAdmin: (payload: VirtualServerAdminInfo) => request<{ ok: boolean }>("/server-admin", { method: "PUT", body: JSON.stringify(payload) }),
-  createServer: (payload: { name: string; port: number; maxClients: number }) => request<CreateServerResponse>("/servers/create", { method: "POST", body: JSON.stringify(payload) }),
+  updateServerAdmin: (payload: VirtualServerAdminInfo) => request<{ ok: boolean }>("/server-admin", { method: "PUT", body: jsonBody(payload) }),
+  createServer: (payload: { name: string; port: number; maxClients: number }) => request<CreateServerResponse>("/servers/create", { method: "POST", body: jsonBody(payload) }),
   createServerSnapshot: () => request<{ snapshot: string }>("/server-snapshot"),
   deployServerSnapshot: (payload: { snapshot: string }) => request<{ ok: boolean }>("/server-snapshot", { method: "POST", body: JSON.stringify(payload) }),
   getPermissionsMeta: () => request<PermissionsMeta>("/permissions/meta"),

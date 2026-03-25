@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 
 	"ts3-dashboard/backend/internal/session"
@@ -18,8 +19,53 @@ func (s *Server) handleServerAdmin(writer http.ResponseWriter, request *http.Req
 		}
 		writeJSON(writer, http.StatusOK, info)
 	case http.MethodPut:
+		body, err := io.ReadAll(request.Body)
+		if err != nil {
+			writeError(writer, http.StatusBadRequest, "请求体无效")
+			return
+		}
+
+		var patch map[string]json.RawMessage
+		if err := json.Unmarshal(body, &patch); err != nil {
+			writeError(writer, http.StatusBadRequest, "请求体无效")
+			return
+		}
+
+		current, err := sess.Client.VirtualServerAdminInfo()
+		if err != nil {
+			writeError(writer, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		currentBody, err := json.Marshal(current)
+		if err != nil {
+			writeError(writer, http.StatusInternalServerError, "服务器内部错误")
+			return
+		}
+
+		merged := make(map[string]json.RawMessage)
+		if err := json.Unmarshal(currentBody, &merged); err != nil {
+			writeError(writer, http.StatusInternalServerError, "服务器内部错误")
+			return
+		}
+
+		// Ignore null fields from the frontend so partial/empty numeric inputs
+		// do not break JSON decoding for Go int fields.
+		for key, value := range patch {
+			if string(value) == "null" {
+				continue
+			}
+			merged[key] = value
+		}
+
+		mergedBody, err := json.Marshal(merged)
+		if err != nil {
+			writeError(writer, http.StatusInternalServerError, "服务器内部错误")
+			return
+		}
+
 		var payload ts3.VirtualServerAdminInfo
-		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+		if err := json.Unmarshal(mergedBody, &payload); err != nil {
 			writeError(writer, http.StatusBadRequest, "请求体无效")
 			return
 		}

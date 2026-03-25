@@ -1,0 +1,16 @@
+.gocache/
+.serena/
+.spec-workflow/
+.tmp/
+
+backend/ts3-dashboard-backend.exe
+
+web/node_modules/
+web/.next/
+web/.vercel/
+web/tsconfig.tsbuildinfo
+
+*.log
+*.tmp
+Thumbs.db
+.DS_Store

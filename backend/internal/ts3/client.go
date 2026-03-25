@@ -13,6 +13,13 @@ import (
 	"time"
 )
 
+const (
+	defaultQueryPort      = 10011
+	queryDialTimeout      = 10 * time.Second
+	queryHandshakeTimeout = 20 * time.Second
+	queryCommandTimeout   = 20 * time.Second
+)
+
 type ConnectOptions struct {
 	Host      string `json:"host"`
 	QueryPort int    `json:"queryPort"`
@@ -139,24 +146,13 @@ type DashboardData struct {
 }
 
 func Connect(ctx context.Context, options ConnectOptions) (*Client, error) {
-	if options.Host == "" {
-		return nil, errors.New("必须填写主机地址")
-	}
-
-	if options.QueryPort == 0 {
-		options.QueryPort = 10011
-	}
-
-	if options.Protocol == "" {
-		options.Protocol = "raw"
-	}
-
-	if !strings.EqualFold(options.Protocol, "raw") {
-		return nil, errors.New("当前 Go 后端仅支持原生查询协议")
+	options, err := normalizeConnectOptions(options)
+	if err != nil {
+		return nil, err
 	}
 
 	address := net.JoinHostPort(options.Host, strconv.Itoa(options.QueryPort))
-	dialer := net.Dialer{Timeout: 10 * time.Second}
+	dialer := net.Dialer{Timeout: queryDialTimeout}
 	conn, err := dialer.DialContext(ctx, "tcp", address)
 	if err != nil {
 		return nil, err
@@ -174,7 +170,7 @@ func Connect(ctx context.Context, options ConnectOptions) (*Client, error) {
 
 	handshakeDeadline, hasDeadline := ctx.Deadline()
 	if !hasDeadline {
-		handshakeDeadline = time.Now().Add(15 * time.Second)
+		handshakeDeadline = time.Now().Add(queryHandshakeTimeout)
 	}
 	if err := conn.SetDeadline(handshakeDeadline); err != nil {
 		_ = conn.Close()
@@ -195,6 +191,36 @@ func Connect(ctx context.Context, options ConnectOptions) (*Client, error) {
 	}
 
 	return client, nil
+}
+
+func normalizeConnectOptions(options ConnectOptions) (ConnectOptions, error) {
+	options.Host = strings.TrimSpace(options.Host)
+	options.Username = strings.TrimSpace(options.Username)
+	options.Nickname = strings.TrimSpace(options.Nickname)
+	options.Protocol = strings.TrimSpace(options.Protocol)
+
+	if options.Host == "" {
+		return ConnectOptions{}, errors.New("必须填写主机地址")
+	}
+
+	if options.QueryPort == 0 {
+		options.QueryPort = defaultQueryPort
+	}
+
+	if options.QueryPort < 1 || options.QueryPort > 65535 {
+		return ConnectOptions{}, errors.New("Query 端口必须在 1 到 65535 之间")
+	}
+
+	if options.Protocol == "" {
+		options.Protocol = "raw"
+	}
+
+	if !strings.EqualFold(options.Protocol, "raw") {
+		return ConnectOptions{}, errors.New("当前 Go 后端仅支持原生查询协议")
+	}
+
+	options.Protocol = "raw"
+	return options, nil
 }
 
 func (c *Client) Close() error {
@@ -258,6 +284,18 @@ func (c *Client) SelectServer(serverID int) error {
 
 	c.selectedServerID = serverID
 	return nil
+}
+
+func (c *Client) UpdateNickname(nickname string) error {
+	nickname = strings.TrimSpace(nickname)
+	if nickname == "" {
+		return nil
+	}
+
+	_, err := c.exec("clientupdate", map[string]string{
+		"client_nickname": nickname,
+	}, nil)
+	return err
 }
 
 func (c *Client) ServerList() ([]ServerSummary, error) {
@@ -528,7 +566,7 @@ func (c *Client) exec(command string, params map[string]string, flags []string) 
 		return nil, errors.New("连接已关闭")
 	}
 
-	if err := c.conn.SetDeadline(time.Now().Add(10 * time.Second)); err != nil {
+	if err := c.conn.SetDeadline(time.Now().Add(queryCommandTimeout)); err != nil {
 		return nil, err
 	}
 

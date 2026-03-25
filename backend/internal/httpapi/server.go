@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"strconv"
@@ -122,24 +123,33 @@ func (s *Server) handleConnect(writer http.ResponseWriter, request *http.Request
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(request.Context(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(request.Context(), 30*time.Second)
 	defer cancel()
 
 	client, err := ts3.Connect(ctx, payload)
 	if err != nil {
-		writeError(writer, http.StatusBadRequest, mapError(err))
+		writeError(writer, statusForConnectError(err), mapError(err, "connect"))
 		return
 	}
 
 	servers, err := client.ServerList()
 	if err != nil {
 		_ = client.Close()
-		writeError(writer, http.StatusBadRequest, mapError(err))
+		writeError(writer, statusForConnectError(err), mapError(err, "server_list"))
 		return
 	}
 
 	if len(servers) > 0 {
-		_ = client.SelectServer(servers[0].ID)
+		if err := client.SelectServer(servers[0].ID); err != nil {
+			_ = client.Close()
+			writeError(writer, statusForConnectError(err), mapError(err, "select_server"))
+			return
+		}
+		if err := client.UpdateNickname(payload.Nickname); err != nil {
+			_ = client.Close()
+			writeError(writer, statusForConnectError(err), mapError(err, "update_nickname"))
+			return
+		}
 	}
 
 	sess, err := s.store.Create(client)
@@ -161,7 +171,8 @@ func (s *Server) handleConnect(writer http.ResponseWriter, request *http.Request
 
 	state, err := client.SessionState()
 	if err != nil {
-		writeError(writer, http.StatusBadRequest, mapError(err))
+		s.store.Delete(sess.ID)
+		writeError(writer, statusForConnectError(err), mapError(err, "session_state"))
 		return
 	}
 
@@ -386,22 +397,81 @@ func writeError(writer http.ResponseWriter, status int, message string) {
 	})
 }
 
-func mapError(err error) string {
+func statusForConnectError(err error) int {
+	if err == nil {
+		return http.StatusOK
+	}
+
+	var queryErr ts3.QueryError
+	if errors.As(err, &queryErr) {
+		message := strings.ToLower(queryErr.Message)
+		if strings.Contains(message, "login") || strings.Contains(message, "password") {
+			return http.StatusUnauthorized
+		}
+		return http.StatusBadGateway
+	}
+
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return http.StatusGatewayTimeout
+	}
+
+	if errors.Is(err, context.DeadlineExceeded) {
+		return http.StatusGatewayTimeout
+	}
+
+	message := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(message, "connection refused"),
+		strings.Contains(message, "no such host"),
+		strings.Contains(message, "network is unreachable"),
+		strings.Contains(message, "no route to host"),
+		strings.Contains(message, "eof"):
+		return http.StatusBadGateway
+	case strings.Contains(message, "必须"),
+		strings.Contains(message, "仅支持"),
+		strings.Contains(message, "端口"):
+		return http.StatusBadRequest
+	default:
+		return http.StatusBadGateway
+	}
+}
+
+func mapError(err error, stage string) string {
 	if err == nil {
 		return ""
 	}
 
 	var queryErr ts3.QueryError
 	if errors.As(err, &queryErr) {
+		if stage == "update_nickname" {
+			return fmt.Sprintf("已连接并选中默认虚拟服务器，但设置查询昵称失败：%s", queryErr.Message)
+		}
 		return queryErr.Message
 	}
 
 	var netErr net.Error
 	if errors.As(err, &netErr) && netErr.Timeout() {
+		switch stage {
+		case "server_list":
+			return "已连接到 TeamSpeak ServerQuery，但读取虚拟服务器列表超时。请稍后重试，并检查远端负载、白名单和 Query 响应速度。"
+		case "select_server":
+			return "已连接到 TeamSpeak ServerQuery，但切换默认虚拟服务器超时。请检查目标实例状态后重试。"
+		case "update_nickname":
+			return "已连接到 TeamSpeak ServerQuery，但设置查询昵称超时。可以先留空昵称重试，确认连接稳定后再调整。"
+		case "session_state":
+			return "已建立 Query 会话，但读取初始状态超时。请稍后重试。"
+		}
 		return "连接 TeamSpeak ServerQuery 超时。请检查主机地址、Query 端口（默认 10011）、ServerQuery 是否已开启，以及防火墙或 IP 白名单配置。"
 	}
 
 	if errors.Is(err, context.DeadlineExceeded) {
+		switch stage {
+		case "server_list":
+			return "已连接到 TeamSpeak ServerQuery，但在请求时限内未能读取虚拟服务器列表。"
+		case "session_state":
+			return "已建立 Query 会话，但在请求时限内未能读取初始状态。"
+		}
 		return "连接 TeamSpeak ServerQuery 超时。请检查目标服务是否可达，以及远端是否正常响应 Query 请求。"
 	}
 
@@ -414,6 +484,9 @@ func mapError(err error) string {
 	case strings.Contains(message, "network is unreachable"), strings.Contains(message, "no route to host"):
 		return "无法到达目标主机。请检查网络连通性、路由和防火墙配置。"
 	case strings.Contains(message, "eof"):
+		if stage == "connect" {
+			return "目标端口建立连接后立即断开，通常说明该端口不是可用的 TeamSpeak ServerQuery 服务，或当前来源 IP 被策略拒绝。"
+		}
 		return "目标服务已断开连接，可能不是可用的 TeamSpeak ServerQuery 服务，或远端主动关闭了连接。"
 	}
 

@@ -234,6 +234,9 @@ func (c *Client) SetClientChannelGroup(groupID int, channelID int, clientDBID in
 func (c *Client) BanList() ([]BanEntry, error) {
 	records, err := c.exec("banlist", nil, nil)
 	if err != nil {
+		if isEmptyResultError(err) {
+			return []BanEntry{}, nil
+		}
 		return nil, err
 	}
 

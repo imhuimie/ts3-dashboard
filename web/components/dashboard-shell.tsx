@@ -159,8 +159,13 @@ export function DashboardShell() {
         return;
       }
 
-      await syncSessionState(currentSession);
-      setState({ loading: false, error: null });
+      try {
+        await syncSessionState(currentSession);
+        setState({ loading: false, error: null });
+      } catch (error) {
+        setSession(currentSession);
+        setState({ loading: false, error: error instanceof Error ? error.message : "加载失败。" });
+      }
     } catch {
       setSession(null);
       setDashboard(null);
@@ -174,11 +179,12 @@ export function DashboardShell() {
   }
 
   async function refreshData() {
-    const [dashboardPayload, viewerPayload, clientsPayload, logsPayload] = await Promise.all([api.getDashboard(), api.getViewer(), api.getClients(), api.getLogs(120)]);
+    const dashboardPayload = await api.getDashboard();
+    const viewerPayload = await api.getViewer();
     setDashboard(dashboardPayload);
     setViewer(viewerPayload);
-    setClients(clientsPayload);
-    setLogs(logsPayload);
+    setClients(dashboardPayload.clientsOnline);
+    setLogs(dashboardPayload.logs);
   }
 
   async function syncSessionState(nextSession: SessionState) {

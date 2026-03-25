@@ -124,6 +124,10 @@ func (s *Server) handleConnect(writer http.ResponseWriter, request *http.Request
 		return
 	}
 
+	if cookie, err := request.Cookie(s.config.CookieName); err == nil && cookie.Value != "" {
+		s.store.Delete(cookie.Value)
+	}
+
 	startedAt := time.Now()
 	log.Printf("connect: start host=%s port=%d protocol=%s user=%s nickname=%s", payload.Host, payload.QueryPort, payload.Protocol, payload.Username, payload.Nickname)
 

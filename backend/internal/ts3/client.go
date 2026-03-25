@@ -18,6 +18,7 @@ const (
 	queryDialTimeout      = 10 * time.Second
 	queryHandshakeTimeout = 20 * time.Second
 	queryCommandTimeout   = 20 * time.Second
+	queryCommandInterval  = 250 * time.Millisecond
 )
 
 type ConnectOptions struct {
@@ -36,6 +37,7 @@ type Client struct {
 	address          string
 	options          ConnectOptions
 	selectedServerID int
+	lastCommandAt    time.Time
 }
 
 type ServerSummary struct {
@@ -591,6 +593,10 @@ func (c *Client) exec(command string, params map[string]string, flags []string) 
 		return nil, errors.New("连接已关闭")
 	}
 
+	if wait := queryCommandInterval - time.Since(c.lastCommandAt); !c.lastCommandAt.IsZero() && wait > 0 {
+		time.Sleep(wait)
+	}
+
 	if err := c.conn.SetDeadline(time.Now().Add(queryCommandTimeout)); err != nil {
 		return nil, err
 	}
@@ -598,6 +604,7 @@ func (c *Client) exec(command string, params map[string]string, flags []string) 
 	if _, err := fmt.Fprintf(c.conn, "%s\n", buildCommand(command, params, flags)); err != nil {
 		return nil, err
 	}
+	c.lastCommandAt = time.Now()
 
 	return c.readRecords()
 }
@@ -783,6 +790,20 @@ func parseQueryError(line string) QueryError {
 		ID:      toInt(record["id"]),
 		Message: record["msg"],
 	}
+}
+
+func isEmptyResultError(err error) bool {
+	var queryErr QueryError
+	if !errors.As(err, &queryErr) {
+		return false
+	}
+
+	if queryErr.ID == 1281 {
+		return true
+	}
+
+	message := strings.ToLower(strings.TrimSpace(queryErr.Message))
+	return strings.Contains(message, "empty result")
 }
 
 func parseRecordLines(lines []string) []map[string]string {

@@ -156,22 +156,21 @@ export function ManagementSections({ sessionKey, selectedServerId, messages, unr
     setLoading(true);
     setError(null);
     try {
-      const [metaPayload, clientsPayload, bansPayload, tokensPayload, complaintsPayload, channelPayload, serverGroupPayload, channelGroupPayload, sessionPayload, serverAdminPayload] = await Promise.all([
-        api.getPermissionsMeta(),
-        api.getClients(),
-        api.getBans(),
-        api.getTokens(),
-        api.getComplaints(),
-        api.getChannels(),
-        api.getServerGroups(),
-        api.getChannelGroups(),
-        api.getSession(),
-        api.getServerAdmin(),
-      ]);
+      const sessionPayload = await api.getSession();
       if (!sessionPayload) {
         setError("会话已失效，请重新连接。");
         return;
       }
+
+      const metaPayload = await api.getPermissionsMeta();
+      const clientsPayload = await api.getClients();
+      const bansPayload = await api.getBans();
+      const tokensPayload = await api.getTokens();
+      const complaintsPayload = await api.getComplaints();
+      const channelPayload = await api.getChannels();
+      const serverGroupPayload = await api.getServerGroups();
+      const channelGroupPayload = await api.getChannelGroups();
+      const serverAdminPayload = await api.getServerAdmin();
 
       setMeta(metaPayload);
       setClients(clientsPayload);

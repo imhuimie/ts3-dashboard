@@ -14,6 +14,9 @@ type ComplaintEntry struct {
 func (c *Client) ComplaintList() ([]ComplaintEntry, error) {
 	records, err := c.exec("complainlist", nil, nil)
 	if err != nil {
+		if isEmptyResultError(err) {
+			return []ComplaintEntry{}, nil
+		}
 		return nil, err
 	}
 

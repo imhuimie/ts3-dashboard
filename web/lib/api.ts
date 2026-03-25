@@ -25,7 +25,7 @@ const API_BASE = process.env.NEXT_PUBLIC_TS3_API_BASE_URL ?? "http://localhost:8
 type RequestOptions = RequestInit & { raw?: boolean };
 
 function buildPath(pathname: string, query?: Record<string, string | number | boolean | undefined>) {
-  const url = new URL(`${API_BASE}${pathname}`);
+  const url = new URL(pathname, "http://ts3-dashboard.local");
   if (query) {
     for (const [key, value] of Object.entries(query)) {
       if (value === undefined) continue;

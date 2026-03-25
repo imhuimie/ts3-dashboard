@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"strconv"
@@ -123,38 +124,52 @@ func (s *Server) handleConnect(writer http.ResponseWriter, request *http.Request
 		return
 	}
 
+	startedAt := time.Now()
+	log.Printf("connect: start host=%s port=%d protocol=%s user=%s nickname=%s", payload.Host, payload.QueryPort, payload.Protocol, payload.Username, payload.Nickname)
+
 	ctx, cancel := context.WithTimeout(request.Context(), 30*time.Second)
 	defer cancel()
 
 	client, err := ts3.Connect(ctx, payload)
 	if err != nil {
+		log.Printf("connect: failed stage=connect duration=%s err=%v", time.Since(startedAt).Round(time.Millisecond), err)
 		writeError(writer, statusForConnectError(err), mapError(err, "connect"))
 		return
 	}
+	log.Printf("connect: stage=connect ok duration=%s", time.Since(startedAt).Round(time.Millisecond))
 
 	servers, err := client.ServerList()
 	if err != nil {
 		_ = client.Close()
+		log.Printf("connect: failed stage=server_list duration=%s err=%v", time.Since(startedAt).Round(time.Millisecond), err)
 		writeError(writer, statusForConnectError(err), mapError(err, "server_list"))
 		return
 	}
+	log.Printf("connect: stage=server_list ok duration=%s servers=%d", time.Since(startedAt).Round(time.Millisecond), len(servers))
 
 	if len(servers) > 0 {
 		if err := client.SelectServer(servers[0].ID); err != nil {
 			_ = client.Close()
+			log.Printf("connect: failed stage=select_server duration=%s server_id=%d err=%v", time.Since(startedAt).Round(time.Millisecond), servers[0].ID, err)
 			writeError(writer, statusForConnectError(err), mapError(err, "select_server"))
 			return
 		}
+		log.Printf("connect: stage=select_server ok duration=%s server_id=%d", time.Since(startedAt).Round(time.Millisecond), servers[0].ID)
 		if err := client.UpdateNickname(payload.Nickname); err != nil {
 			_ = client.Close()
+			log.Printf("connect: failed stage=update_nickname duration=%s err=%v", time.Since(startedAt).Round(time.Millisecond), err)
 			writeError(writer, statusForConnectError(err), mapError(err, "update_nickname"))
 			return
+		}
+		if strings.TrimSpace(payload.Nickname) != "" {
+			log.Printf("connect: stage=update_nickname ok duration=%s", time.Since(startedAt).Round(time.Millisecond))
 		}
 	}
 
 	sess, err := s.store.Create(client)
 	if err != nil {
 		_ = client.Close()
+		log.Printf("connect: failed stage=create_session duration=%s err=%v", time.Since(startedAt).Round(time.Millisecond), err)
 		writeError(writer, http.StatusInternalServerError, "internal server error")
 		return
 	}
@@ -172,9 +187,11 @@ func (s *Server) handleConnect(writer http.ResponseWriter, request *http.Request
 	state, err := client.SessionState()
 	if err != nil {
 		s.store.Delete(sess.ID)
+		log.Printf("connect: failed stage=session_state duration=%s err=%v", time.Since(startedAt).Round(time.Millisecond), err)
 		writeError(writer, statusForConnectError(err), mapError(err, "session_state"))
 		return
 	}
+	log.Printf("connect: success duration=%s selected_server_id=%v", time.Since(startedAt).Round(time.Millisecond), state["selectedServerId"])
 
 	writeJSON(writer, http.StatusOK, state)
 }

@@ -554,8 +554,33 @@ func (c *Client) readGreeting() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	_, err := c.readRecords()
-	return err
+	for {
+		line, err := c.reader.ReadString('\n')
+		if err != nil {
+			return err
+		}
+
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		if strings.HasPrefix(line, "TS3") {
+			continue
+		}
+
+		if strings.HasPrefix(line, "Welcome") {
+			return nil
+		}
+
+		if strings.HasPrefix(line, "error ") {
+			queryErr := parseQueryError(line)
+			if queryErr.ID != 0 {
+				return queryErr
+			}
+			return nil
+		}
+	}
 }
 
 func (c *Client) exec(command string, params map[string]string, flags []string) ([]map[string]string, error) {

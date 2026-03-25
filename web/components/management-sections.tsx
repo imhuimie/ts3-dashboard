@@ -411,7 +411,9 @@ export function ManagementSections({ sessionKey, selectedServerId, messages, unr
     setMessageStatus(null);
     try {
       const targets = messageForm.targetMode === 1 ? messageForm.targets : [messageForm.target];
-      await Promise.all(targets.map((target) => api.sendTextMessage({ targetMode: messageForm.targetMode, target, message: messageForm.message })));
+      for (const target of targets) {
+        await api.sendTextMessage({ targetMode: messageForm.targetMode, target, message: messageForm.message });
+      }
       for (const target of targets) onMessageSent({ targetMode: messageForm.targetMode, target, message: messageForm.message });
       setMessageStatus(targets.length > 1 ? `消息已发送给 ${targets.length} 个客户端。` : "消息已发送。");
       setMessageForm((current) => ({ ...current, message: "" }));

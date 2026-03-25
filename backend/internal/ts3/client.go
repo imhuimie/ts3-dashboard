@@ -18,7 +18,8 @@ const (
 	queryDialTimeout      = 10 * time.Second
 	queryHandshakeTimeout = 20 * time.Second
 	queryCommandTimeout   = 20 * time.Second
-	queryCommandInterval  = 250 * time.Millisecond
+	queryCommandInterval  = 600 * time.Millisecond
+	queryFloodRetryDelay  = 3 * time.Second
 )
 
 type ConnectOptions struct {
@@ -606,6 +607,25 @@ func (c *Client) exec(command string, params map[string]string, flags []string) 
 	}
 	c.lastCommandAt = time.Now()
 
+	records, err := c.readRecords()
+	if err == nil {
+		return records, nil
+	}
+	if !isFloodingError(err) {
+		return nil, err
+	}
+
+	// TS3 ServerQuery may temporarily reject bursts even with pacing.
+	// Wait a bit and retry the same command once.
+	time.Sleep(queryFloodRetryDelay)
+	if err := c.conn.SetDeadline(time.Now().Add(queryCommandTimeout)); err != nil {
+		return nil, err
+	}
+	if _, retryErr := fmt.Fprintf(c.conn, "%s\n", buildCommand(command, params, flags)); retryErr != nil {
+		return nil, retryErr
+	}
+	c.lastCommandAt = time.Now()
+
 	return c.readRecords()
 }
 
@@ -824,6 +844,16 @@ func isInvalidParameterError(err error) bool {
 
 	message := strings.ToLower(strings.TrimSpace(queryErr.Message))
 	return strings.Contains(message, "invalid parameter") || strings.Contains(message, "convert error")
+}
+
+func isFloodingError(err error) bool {
+	var queryErr QueryError
+	if !errors.As(err, &queryErr) {
+		return false
+	}
+
+	message := strings.ToLower(strings.TrimSpace(queryErr.Message))
+	return strings.Contains(message, "flood")
 }
 
 func parseRecordLines(lines []string) []map[string]string {

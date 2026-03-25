@@ -56,6 +56,9 @@ func (c *Client) FileList(channelID int, folderPath string) ([]FileEntry, error)
 		"path": resolvedPath,
 	}, nil)
 	if err != nil {
+		if isEmptyResultError(err) {
+			return []FileEntry{}, nil
+		}
 		return nil, err
 	}
 
@@ -379,4 +382,3 @@ func newClientTransferID() string {
 
 	return strconv.FormatInt(time.Now().UnixNano(), 10)
 }
-

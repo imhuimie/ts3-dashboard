@@ -99,7 +99,8 @@ export function DashboardShell() {
       eventSource.addEventListener(eventName, onUpdate);
     }
     eventSource.onerror = () => {
-      setLiveStatus("error");
+      setLiveStatus((current) => (current === "offline" ? "error" : "connecting"));
+      setLastEvent("实时事件流正在重连。");
     };
 
     return () => {
@@ -381,8 +382,8 @@ function OverviewSection({ dashboard, onlineClients, viewer, logs, eventFeed, on
         <MetricCard icon={Wifi} label="运行时长" value={formatDuration(dashboard.serverInfo.uptimeSeconds)} meta={`查询连接数 ${dashboard.serverInfo.queryConnections}`} />
       </section>
       <section className="grid gap-4 xl:grid-cols-[1.3fr_0.7fr]">
-        <Panel title="连接趋势" subtitle="根据近期日志推断的连接变化趋势。"><div className="h-72"><ResponsiveContainer width="100%" height="100%"><AreaChart data={dashboard.connectionsByDay}><defs><linearGradient id="traffic" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#22d3ee" stopOpacity={0.65} /><stop offset="100%" stopColor="#22d3ee" stopOpacity={0.05} /></linearGradient></defs><CartesianGrid stroke="rgba(141,160,189,0.12)" vertical={false} /><XAxis dataKey="label" stroke="#8da0bd" /><YAxis stroke="#8da0bd" allowDecimals={false} /><Tooltip contentStyle={tooltipStyle} /><Area type="monotone" dataKey="value" stroke="#22d3ee" fill="url(#traffic)" strokeWidth={2.5} /></AreaChart></ResponsiveContainer></div></Panel>
-        <Panel title="日志级别分布" subtitle="快速查看各日志级别的分布情况。"><div className="h-72"><ResponsiveContainer width="100%" height="100%"><BarChart data={dashboard.logLevels}><CartesianGrid stroke="rgba(141,160,189,0.12)" vertical={false} /><XAxis dataKey="label" stroke="#8da0bd" /><YAxis stroke="#8da0bd" allowDecimals={false} /><Tooltip contentStyle={tooltipStyle} /><Bar dataKey="value" radius={[10, 10, 0, 0]} fill="#74c0fc" /></BarChart></ResponsiveContainer></div></Panel>
+        <Panel title="连接趋势" subtitle="根据近期日志推断的连接变化趋势。"><div className="h-72 min-w-0"><ResponsiveContainer width="100%" height="100%" minWidth={0}><AreaChart data={dashboard.connectionsByDay}><defs><linearGradient id="traffic" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#22d3ee" stopOpacity={0.65} /><stop offset="100%" stopColor="#22d3ee" stopOpacity={0.05} /></linearGradient></defs><CartesianGrid stroke="rgba(141,160,189,0.12)" vertical={false} /><XAxis dataKey="label" stroke="#8da0bd" /><YAxis stroke="#8da0bd" allowDecimals={false} /><Tooltip contentStyle={tooltipStyle} /><Area type="monotone" dataKey="value" stroke="#22d3ee" fill="url(#traffic)" strokeWidth={2.5} /></AreaChart></ResponsiveContainer></div></Panel>
+        <Panel title="日志级别分布" subtitle="快速查看各日志级别的分布情况。"><div className="h-72 min-w-0"><ResponsiveContainer width="100%" height="100%" minWidth={0}><BarChart data={dashboard.logLevels}><CartesianGrid stroke="rgba(141,160,189,0.12)" vertical={false} /><XAxis dataKey="label" stroke="#8da0bd" /><YAxis stroke="#8da0bd" allowDecimals={false} /><Tooltip contentStyle={tooltipStyle} /><Bar dataKey="value" radius={[10, 10, 0, 0]} fill="#74c0fc" /></BarChart></ResponsiveContainer></div></Panel>
       </section>
       <section className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
         <Panel title="在线客户端" subtitle="若可用，将通过 TS3 文件传输通道加载头像。"><ClientGrid clients={onlineClients} /></Panel>

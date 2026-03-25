@@ -806,6 +806,26 @@ func isEmptyResultError(err error) bool {
 	return strings.Contains(message, "empty result")
 }
 
+func isUnsupportedCommandError(err error) bool {
+	var queryErr QueryError
+	if !errors.As(err, &queryErr) {
+		return false
+	}
+
+	message := strings.ToLower(strings.TrimSpace(queryErr.Message))
+	return strings.Contains(message, "command not found") || strings.Contains(message, "invalid command")
+}
+
+func isInvalidParameterError(err error) bool {
+	var queryErr QueryError
+	if !errors.As(err, &queryErr) {
+		return false
+	}
+
+	message := strings.ToLower(strings.TrimSpace(queryErr.Message))
+	return strings.Contains(message, "invalid parameter") || strings.Contains(message, "convert error")
+}
+
 func parseRecordLines(lines []string) []map[string]string {
 	records := make([]map[string]string, 0)
 	for _, line := range lines {

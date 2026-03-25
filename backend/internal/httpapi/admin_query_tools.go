@@ -13,7 +13,7 @@ import (
 func (s *Server) handleAPIKeys(writer http.ResponseWriter, request *http.Request, sess *session.Session) {
 	switch request.Method {
 	case http.MethodGet:
-		keys, err := sess.Client.APIKeyList("*")
+		keys, err := sess.Client.APIKeyList("")
 		if err != nil {
 			writeError(writer, http.StatusBadRequest, err.Error())
 			return

@@ -8,6 +8,9 @@ import (
 func (c *Client) TokenList() ([]TokenEntry, error) {
 	records, err := c.exec("tokenlist", nil, nil)
 	if err != nil {
+		if isEmptyResultError(err) {
+			return []TokenEntry{}, nil
+		}
 		return nil, err
 	}
 
@@ -96,6 +99,9 @@ func (c *Client) Permissions(scope PermissionScope, targetID int, channelID int)
 
 	records, err := c.exec(command, params, nil)
 	if err != nil {
+		if isEmptyResultError(err) {
+			return []PermissionEntry{}, nil
+		}
 		return nil, err
 	}
 

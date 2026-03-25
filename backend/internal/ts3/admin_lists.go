@@ -18,6 +18,9 @@ func (c *Client) ClientDBList() ([]ClientDBEntry, error) {
 			"duration": strconv.Itoa(duration),
 		}, nil)
 		if err != nil {
+			if isEmptyResultError(err) {
+				break
+			}
 			return nil, err
 		}
 		if len(records) == 0 {

@@ -8,14 +8,23 @@ import (
 )
 
 func (c *Client) APIKeyList(clientDBPattern string) ([]APIKeyEntry, error) {
-	if strings.TrimSpace(clientDBPattern) == "" {
-		clientDBPattern = "*"
+	pattern := strings.TrimSpace(clientDBPattern)
+	params := map[string]string{}
+	if pattern != "" {
+		params["cldbid"] = pattern
 	}
 
-	records, err := c.exec("apikeylist", map[string]string{
-		"cldbid": clientDBPattern,
-	}, nil)
+	records, err := c.exec("apikeylist", params, []string{"-count"})
 	if err != nil {
+		if isEmptyResultError(err) {
+			return []APIKeyEntry{}, nil
+		}
+		if isInvalidParameterError(err) && pattern != "" {
+			records, err = c.exec("apikeylist", nil, []string{"-count"})
+		}
+		if err != nil && isUnsupportedCommandError(err) {
+			return []APIKeyEntry{}, nil
+		}
 		return nil, err
 	}
 
